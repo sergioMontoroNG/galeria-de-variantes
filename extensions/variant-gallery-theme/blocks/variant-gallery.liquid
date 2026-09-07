@@ -1,0 +1,50 @@
+{% comment %}
+  Renders no visible markup. It serializes, per variant, the mini gallery
+  configured in the admin (product_variant.metafields.app.gallery) plus the
+  legacy variant image and the product's default image order, then loads the
+  JS that filters/reorders the theme's own product gallery on variant change.
+
+  This has to be an app block (target: section) rather than an app embed
+  block, because app embed blocks only get the Global Liquid scope and can't
+  read `product`/`product.variants`.
+{% endcomment %}
+{% if product %}
+  <script type="application/json" data-variant-gallery-data>
+    {
+      "images": [
+        {% for media in product.media %}
+          {% if media.media_type == "image" %}
+            { "id": {{ media.id | json }}, "src": {{ media.preview_image | image_url: width: 2048 | json }} }{% unless forloop.last %},{% endunless %}
+          {% endif %}
+        {% endfor %}
+      ],
+      "variants": {
+        {% for variant in product.variants %}
+          {% assign gallery_images = variant.metafields.app.gallery.value %}
+          "{{ variant.id }}": {
+            "gallery": [
+              {% if gallery_images %}
+                {% for image in gallery_images %}
+                  {{ image.id | json }}{% unless forloop.last %},{% endunless %}
+                {% endfor %}
+              {% endif %}
+            ],
+            "legacyImageId": {{ variant.image.id | json }}
+          }{% unless forloop.last %},{% endunless %}
+        {% endfor %}
+      }
+    }
+  </script>
+  <script src="{{ 'variant-gallery-core.js' | asset_url }}" defer></script>
+  <script src="{{ 'variant-gallery-adapter.js' | asset_url }}" defer></script>
+{% endif %}
+
+{% schema %}
+{
+  "name": "Galeria de variantes",
+  "target": "section",
+  "settings": [
+    { "type": "product", "id": "product", "label": "Producto", "autofill": true }
+  ]
+}
+{% endschema %}
