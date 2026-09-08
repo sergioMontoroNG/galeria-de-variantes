@@ -160,9 +160,10 @@ function Extension() {
 
         <s-text tone="subdued">
           Elige qué imágenes del producto forman parte de la galería de esta
-          variante y ordénalas con las flechas. Si dejas solo 1 imagen, en la
-          tienda se mostrarán todas las imágenes del producto pero con esta
-          priorizada en primer lugar.
+          variante y ordénalas con las flechas. Con 2 o más imágenes, en la
+          tienda se mostrará primero la imagen principal de la variante
+          seguida de estas. Si dejas solo 1, se mostrarán todas las imágenes
+          del producto pero con esta priorizada en primer lugar.
         </s-text>
 
         {orderedSelected.length > 0 && (
