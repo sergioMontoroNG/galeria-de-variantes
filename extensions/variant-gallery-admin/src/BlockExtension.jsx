@@ -167,27 +167,36 @@ function Extension() {
         </s-text>
 
         {orderedSelected.length > 0 && (
-          <s-stack direction="block" gap="tight">
+          <s-stack direction="block" gap="small-200">
             <s-text type="strong">Orden de la mini galería</s-text>
             {orderedSelected.map((img, index) => (
-              <s-stack key={index} direction="inline" gap="tight" alignItems="center">
-                <s-thumbnail src={img.url} alt={img.alt} size="small" />
-                <s-text>{index + 1}</s-text>
-                <s-button
-                  disabled={index === 0}
-                  onClick={() => moveImage(img.id, -1)}
-                  accessibilityLabel="Subir"
-                >
-                  ↑
-                </s-button>
-                <s-button
-                  disabled={index === orderedSelected.length - 1}
-                  onClick={() => moveImage(img.id, 1)}
-                  accessibilityLabel="Bajar"
-                >
-                  ↓
-                </s-button>
-              </s-stack>
+              <s-box
+                key={img.id}
+                padding="small-200"
+                borderRadius="small"
+                borderWidth="small-100"
+                borderColor="subdued"
+                background="subdued"
+              >
+                <s-stack direction="inline" gap="base" alignItems="center">
+                  <s-thumbnail src={img.url} alt={img.alt} size="small" />
+                  <s-text>{index + 1}</s-text>
+                  <s-button
+                    disabled={index === 0}
+                    onClick={() => moveImage(img.id, -1)}
+                    accessibilityLabel="Subir"
+                  >
+                    ↑
+                  </s-button>
+                  <s-button
+                    disabled={index === orderedSelected.length - 1}
+                    onClick={() => moveImage(img.id, 1)}
+                    accessibilityLabel="Bajar"
+                  >
+                    ↓
+                  </s-button>
+                </s-stack>
+              </s-box>
             ))}
           </s-stack>
         )}
@@ -197,17 +206,26 @@ function Extension() {
           {productImages.length === 0 && (
             <s-text tone="subdued">Este producto todavía no tiene imágenes.</s-text>
           )}
-          <s-grid gridTemplateColumns="repeat(auto-fill, minmax(48px, 1fr))" gap="tight">
-            {productImages.map((img) => (
-              <s-stack key={img.id} direction="block" gap="extra-tight" alignItems="center">
-                <s-thumbnail src={img.url} alt={img.alt} size="small" />
-                <s-checkbox
-                  checked={selectedIds.includes(img.id)}
-                  onChange={() => toggleImage(img.id)}
-                  accessibilityLabel={img.alt || 'Incluir imagen en la galería'}
-                />
-              </s-stack>
-            ))}
+          <s-grid gridTemplateColumns="repeat(auto-fill, minmax(48px, 1fr))" gap="small-200">
+            {productImages.map((img) => {
+              const selected = selectedIds.includes(img.id);
+              return (
+                <s-clickable
+                  key={img.id}
+                  onClick={() => toggleImage(img.id)}
+                  accessibilityLabel={
+                    img.alt || (selected ? 'Quitar de la galería' : 'Incluir en la galería')
+                  }
+                  padding="small-200"
+                  borderRadius="small"
+                  borderWidth={selected ? 'large' : 'small-100'}
+                  borderColor={selected ? 'strong' : 'subdued'}
+                  background={selected ? 'subdued' : 'transparent'}
+                >
+                  <s-thumbnail src={img.url} alt={img.alt} size="small" />
+                </s-clickable>
+              );
+            })}
           </s-grid>
         </s-stack>
 

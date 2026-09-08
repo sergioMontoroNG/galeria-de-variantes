@@ -16,7 +16,9 @@ async function mount() {
 // queries (which rely on real ARIA semantics) can't see them - props like
 // `accessibilityLabel` land as a plain lowercase attribute, not `aria-label`.
 // Querying by tag/attribute directly is the reliable way to reach them.
-const checkboxes = () => Array.from(document.querySelectorAll("s-checkbox"));
+// Each product thumbnail in the "Imágenes del producto" grid is wrapped in
+// an `s-clickable` that toggles selection (there is no checkbox anymore).
+const clickableThumbnails = () => Array.from(document.querySelectorAll("s-clickable"));
 const buttonsLabelled = (label) =>
   Array.from(document.querySelectorAll(`s-button[accessibilitylabel="${label}"]`));
 const isDisabled = (el) => el.getAttribute("disabled") === "true";
@@ -50,7 +52,7 @@ describe("BlockExtension (admin mini-gallery editor)", () => {
     delete globalThis.shopify;
   });
 
-  it("loads the product's images and pre-checks the ones already saved on the variant", async () => {
+  it("loads the product's images and pre-selects the ones already saved on the variant", async () => {
     globalThis.shopify.query.mockResolvedValueOnce(
       queryResponse({
         mediaNodes: [image("gid://shopify/MediaImage/1"), image("gid://shopify/MediaImage/2")],
@@ -60,7 +62,7 @@ describe("BlockExtension (admin mini-gallery editor)", () => {
 
     await mount();
 
-    await waitFor(() => expect(checkboxes()).toHaveLength(2));
+    await waitFor(() => expect(clickableThumbnails()).toHaveLength(2));
     expect(globalThis.shopify.query).toHaveBeenCalledWith(
       expect.stringContaining("VariantGallery"),
       { variables: { variantId: "gid://shopify/ProductVariant/1" } },
@@ -82,7 +84,7 @@ describe("BlockExtension (admin mini-gallery editor)", () => {
 
     await mount();
 
-    await waitFor(() => expect(checkboxes()).toHaveLength(1));
+    await waitFor(() => expect(clickableThumbnails()).toHaveLength(1));
   });
 
   it("shows an empty-state message when the product has no images", async () => {
@@ -110,7 +112,7 @@ describe("BlockExtension (admin mini-gallery editor)", () => {
 
     await mount();
 
-    await waitFor(() => expect(checkboxes()).toHaveLength(1));
+    await waitFor(() => expect(clickableThumbnails()).toHaveLength(1));
     expect(screen.queryByText("Orden de la mini galería")).not.toBeInTheDocument();
   });
 
@@ -126,24 +128,45 @@ describe("BlockExtension (admin mini-gallery editor)", () => {
     });
   });
 
-  it("toggling a checkbox adds the image to the ordered mini-gallery list, unchecking removes it", async () => {
+  it("clicking a thumbnail adds the image to the ordered mini-gallery list, clicking again removes it", async () => {
     globalThis.shopify.query.mockResolvedValueOnce(
       queryResponse({ mediaNodes: [image("gid://shopify/MediaImage/1")] }),
     );
 
     await mount();
-    await waitFor(() => expect(checkboxes()).toHaveLength(1));
+    await waitFor(() => expect(clickableThumbnails()).toHaveLength(1));
     expect(screen.queryByText("Orden de la mini galería")).not.toBeInTheDocument();
 
-    fireEvent.change(checkboxes()[0]);
+    fireEvent.click(clickableThumbnails()[0]);
     await waitFor(() =>
       expect(screen.getByText("Orden de la mini galería")).toBeInTheDocument(),
     );
 
-    fireEvent.change(checkboxes()[0]);
+    fireEvent.click(clickableThumbnails()[0]);
     await waitFor(() =>
       expect(screen.queryByText("Orden de la mini galería")).not.toBeInTheDocument(),
     );
+  });
+
+  it("marks a selected thumbnail with a stronger border and unmarks it when deselected, instead of a checkbox", async () => {
+    globalThis.shopify.query.mockResolvedValueOnce(
+      queryResponse({ mediaNodes: [image("gid://shopify/MediaImage/1")] }),
+    );
+
+    await mount();
+    await waitFor(() => expect(clickableThumbnails()).toHaveLength(1));
+    const thumbnail = clickableThumbnails()[0];
+
+    // No checkbox anywhere in the grid - selection is shown purely via the
+    // clickable thumbnail's border.
+    expect(document.querySelector("s-checkbox")).toBeNull();
+    expect(thumbnail.getAttribute("borderwidth")).toBe("small-100");
+    expect(thumbnail.getAttribute("bordercolor")).toBe("subdued");
+
+    fireEvent.click(thumbnail);
+
+    expect(thumbnail.getAttribute("borderwidth")).toBe("large");
+    expect(thumbnail.getAttribute("bordercolor")).toBe("strong");
   });
 
   it("moving an image up/down reorders the mini-gallery list and disables arrows at the boundaries", async () => {
@@ -224,8 +247,8 @@ describe("BlockExtension (admin mini-gallery editor)", () => {
       });
 
     await mount();
-    await waitFor(() => expect(checkboxes()).toHaveLength(1));
-    fireEvent.change(checkboxes()[0]);
+    await waitFor(() => expect(clickableThumbnails()).toHaveLength(1));
+    fireEvent.click(clickableThumbnails()[0]);
     await waitFor(() =>
       expect(screen.getByText("Orden de la mini galería")).toBeInTheDocument(),
     );
@@ -246,8 +269,8 @@ describe("BlockExtension (admin mini-gallery editor)", () => {
       .mockRejectedValueOnce(new Error("network error"));
 
     await mount();
-    await waitFor(() => expect(checkboxes()).toHaveLength(1));
-    fireEvent.change(checkboxes()[0]);
+    await waitFor(() => expect(clickableThumbnails()).toHaveLength(1));
+    fireEvent.click(clickableThumbnails()[0]);
     await waitFor(() =>
       expect(screen.getByText("Orden de la mini galería")).toBeInTheDocument(),
     );
@@ -270,8 +293,8 @@ describe("BlockExtension (admin mini-gallery editor)", () => {
       .mockResolvedValueOnce({ data: { metafieldsSet: { userErrors: [] } } });
 
     await mount();
-    await waitFor(() => expect(checkboxes()).toHaveLength(1));
-    fireEvent.change(checkboxes()[0]);
+    await waitFor(() => expect(clickableThumbnails()).toHaveLength(1));
+    fireEvent.click(clickableThumbnails()[0]);
     await waitFor(() =>
       expect(screen.getByText("Orden de la mini galería")).toBeInTheDocument(),
     );
