@@ -17,7 +17,9 @@
     "prisma": "prisma",
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
-    "typecheck": "react-router typegen && tsc --noEmit"
+    "typecheck": "react-router typegen && tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "type": "module",
   "engines": {
@@ -42,6 +44,8 @@
   "devDependencies": {
     "@shopify/api-codegen-preset": "^1.2.0",
     "@shopify/polaris-types": "^1.0.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/preact": "^3.2.4",
     "@types/eslint": "^9.6.1",
     "@types/node": "^22.18.8",
     "@types/react": "^18.3.25",
@@ -55,9 +59,11 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^4.6.2",
     "graphql-config": "^5.1.1",
+    "jsdom": "^30.0.1",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
-    "vite": "^6.3.6"
+    "vite": "^6.3.6",
+    "vitest": "^5.0.0"
   },
   "workspaces": [
     "extensions/*"
