@@ -169,7 +169,7 @@ function Extension() {
           <s-stack direction="block" gap="tight">
             <s-text type="strong">Orden de la mini galería</s-text>
             {orderedSelected.map((img, index) => (
-              <s-stack key={img.id} direction="inline" gap="tight" alignItems="center">
+              <s-stack key={index} direction="inline" gap="tight" alignItems="center">
                 <s-thumbnail src={img.url} alt={img.alt} size="small" />
                 <s-text>{index + 1}</s-text>
                 <s-button
