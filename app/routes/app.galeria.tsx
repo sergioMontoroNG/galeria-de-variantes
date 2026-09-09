@@ -43,6 +43,12 @@ const VARIANT_GALLERY_QUERY = `#graphql
         id
         title
         onlineStorePreviewUrl
+        variants(first: 250) {
+          nodes {
+            id
+            title
+          }
+        }
         media(first: 250) {
           nodes {
             id
@@ -81,6 +87,7 @@ const SAVE_VARIANT_GALLERY_MUTATION = `#graphql
 `;
 
 type GalleryImage = { id: string; url: string; alt: string };
+type SiblingVariant = { id: string; title: string };
 
 type VariantGallery = {
   id: string;
@@ -90,6 +97,7 @@ type VariantGallery = {
   images: GalleryImage[];
   selectedIds: string[];
   storeUrl: string | null;
+  siblingVariants: SiblingVariant[];
 };
 
 async function loadVariantGallery(
@@ -143,6 +151,10 @@ async function loadVariantGallery(
       ? `${previewUrl}${previewUrl.includes("?") ? "&" : "?"}variant=${variant.legacyResourceId}`
       : previewUrl;
 
+  const siblingVariants: SiblingVariant[] = (variant.product?.variants?.nodes ?? []).map(
+    (node: { id: string; title: string }) => ({ id: node.id, title: node.title }),
+  );
+
   return {
     id: variant.id,
     title: variant.title,
@@ -151,6 +163,7 @@ async function loadVariantGallery(
     images,
     selectedIds,
     storeUrl,
+    siblingVariants,
   };
 }
 
@@ -419,6 +432,23 @@ export default function GaleriaDeVariantes() {
                 })}
               </s-grid>
             </s-stack>
+          </s-stack>
+        </s-section>
+      )}
+
+      {variant && variant.siblingVariants.length > 1 && (
+        <s-section slot="aside" heading={`Variantes de ${variant.productTitle}`}>
+          <s-stack direction="block" gap="small">
+            {variant.siblingVariants.map((sibling) => (
+              <s-button
+                key={sibling.id}
+                variant="tertiary"
+                disabled={variant.id === sibling.id}
+                onClick={() => openVariant(sibling.id)}
+              >
+                {sibling.title}
+              </s-button>
+            ))}
           </s-stack>
         </s-section>
       )}
