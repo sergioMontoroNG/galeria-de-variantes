@@ -1,4 +1,5 @@
 import type { Config } from "@react-router/dev/config";
+import { vercelPreset } from "@vercel/react-router/vite";
 
 // `shopify app dev` proxies the embedded app through an ephemeral Cloudflare
 // tunnel (a random *.trycloudflare.com subdomain each run). The tunnel
@@ -12,4 +13,5 @@ import type { Config } from "@react-router/dev/config";
 export default {
   allowedActionOrigins:
     process.env.NODE_ENV === "production" ? undefined : ["*.trycloudflare.com"],
+  presets: [vercelPreset()],
 } satisfies Config;

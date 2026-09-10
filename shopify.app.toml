@@ -2,7 +2,7 @@
 
 client_id = "c377bffdd5f972ad0a2f3d97547af3f5"
 name = "galeria de variantes"
-application_url = "https://example.com"
+application_url = "https://galeria-de-variantes.vercel.app"
 embedded = true
 
 [access_scopes]
@@ -53,8 +53,7 @@ api_version = "2026-10"
   topics = [ "app/scopes_update" ]
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://galeria-de-variantes.vercel.app/auth/callback" ]
 
 [build]
-include_config_on_deploy = true
 automatically_update_urls_on_dev = true
