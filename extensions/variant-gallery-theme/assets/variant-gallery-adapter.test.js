@@ -43,6 +43,10 @@ function slidesContainer() {
 function addSlide(mediaId, sectionPrefix = "template--123__main") {
   const slide = document.createElement("div");
   slide.setAttribute("data-media-id", `${sectionPrefix}-${mediaId}`);
+  // Real theme markup always tags image slides this way (product.js /
+  // main-product.liquid); needed for the full-bleed modifier tests below,
+  // which gate on this class.
+  slide.classList.add("product-images__slide--image");
   slidesContainer().appendChild(slide);
   return slide;
 }
@@ -266,5 +270,29 @@ describe("variant-gallery-adapter", () => {
     await loadAdapter();
 
     expect(slide.hidden).toBe(true);
+  });
+
+  it("moves visible slides ahead of hidden ones in the DOM, not just among themselves", async () => {
+    // Reformation's "Grid" layout sizes each slide by raw DOM position
+    // (nth-child: first 6 -> 50% width, 7th+ -> 25%), counting hidden
+    // slides too. With 8 total images and only 2 visible, the visible pair
+    // must land in DOM positions 1-2, not get pushed behind the 6 hidden
+    // ones into the 25%-width bucket.
+    const payload = basePayload();
+    for (let id = 4; id <= 8; id++) {
+      payload.images.push({ id, src: `https://example.com/${id}.jpg` });
+    }
+    payload.variants[500] = { gallery: [2, 3], legacyImageId: null }; // visible: [2, 3]
+    setPayload(payload);
+    setVariantInput(500);
+    const s1 = addSlide(1);
+    const s2 = addSlide(2);
+    const s3 = addSlide(3);
+    const rest = [4, 5, 6, 7, 8].map((id) => addSlide(id));
+    const parent = s1.parentElement;
+
+    await loadAdapter();
+
+    expect(Array.from(parent.children)).toEqual([s2, s3, s1, ...rest]);
   });
 });

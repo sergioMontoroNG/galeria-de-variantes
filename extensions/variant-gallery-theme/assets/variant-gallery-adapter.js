@@ -63,13 +63,32 @@
     var parent = slides[0] && slides[0].parentElement;
     if (!parent) return;
 
-    order.forEach(function (id, i) {
+    // Reformation's "Grid" media layout (main-product.liquid's inline
+    // <style>) sizes each slide purely by DOM position - the first 6
+    // `.product-images__slide` children get 50% width (2 per row), the 7th
+    // onward get 25% (4 per row) - counting hidden slides too, since
+    // `display:none` doesn't remove an element from :nth-child counting.
+    // A visible slide must therefore be moved to the front of the DOM, not
+    // just reordered among the other visible ones, or a product with more
+    // than 6 images ends up dumping its 2-3 visible slides into the 25%
+    // bucket and leaving the rest of that row empty.
+    var visibleSlides = [];
+    order.forEach(function (id) {
       var slide = bySlideId[id];
-      if (!slide) return;
+      if (slide) visibleSlides.push(slide);
+    });
+    var hiddenSlides = slides.filter(function (slide) {
+      return visibleSlides.indexOf(slide) === -1;
+    });
+
+    visibleSlides.forEach(function (slide, i) {
       parent.appendChild(slide);
       // Mirrors the theme's own updateMedia(): the first visible slide is
       // the one marked active for the slider/pagination UI.
       slide.classList.toggle('is-active', i === 0);
+    });
+    hiddenSlides.forEach(function (slide) {
+      parent.appendChild(slide);
     });
   }
 
