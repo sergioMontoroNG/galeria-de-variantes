@@ -3,6 +3,15 @@ name: Vercel Deploy
 # Despliega en Vercel en cada push usando solo VERCEL_TOKEN.
 # Se elimina .git antes de desplegar para que el deployment no lleve
 # metadatos de autor/commit (deployment "anónimo").
+#
+# Una rama por tienda/app: cada una va a producción en su propio proyecto de Vercel.
+#   main -> galeria-de-variantes   (ES, FR, IT, DE; proyecto en el secret VERCEL_PROJECT_ID)
+#   uk   -> galeria-de-variantes-uk
+#   mx   -> galeria-de-variantes-mx
+#   usa  -> galeria-de-variantes-usa
+# Cualquier otra rama hace un preview en el proyecto principal.
+# Los IDs de proyecto son identificadores, no credenciales; todos son del mismo equipo
+# (VERCEL_ORG_ID), así que un solo VERCEL_TOKEN los cubre.
 
 on:
   push:
@@ -32,10 +41,13 @@ jobs:
       - name: Strip git metadata
         run: rm -rf .git
 
-      - name: Deploy (production on main, preview elsewhere)
+      - name: Deploy (producción por rama de tienda, preview en el resto)
         run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            vercel deploy --prod --yes --token "$VERCEL_TOKEN"
-          else
-            vercel deploy --yes --token "$VERCEL_TOKEN"
-          fi
+          case "${{ github.ref_name }}" in
+            main) PROJECT_ID="$VERCEL_PROJECT_ID"; PROD="--prod" ;;
+            uk)   PROJECT_ID="prj_MXFkVUJSphhActp18NHNn9ZyGY7i"; PROD="--prod" ;;
+            mx)   PROJECT_ID="prj_pEGMqg37NAkTQk99YR0XKzlcfkEj"; PROD="--prod" ;;
+            usa)  PROJECT_ID="prj_saUfdsMH9fuMUHRIuqWgrOu2AnLf"; PROD="--prod" ;;
+            *)    PROJECT_ID="$VERCEL_PROJECT_ID"; PROD="" ;;
+          esac
+          VERCEL_PROJECT_ID="$PROJECT_ID" vercel deploy $PROD --yes --token "$VERCEL_TOKEN"
