@@ -23,7 +23,7 @@ const SAVE_GALLERIES_MUTATION = `#graphql
   mutation SaveVariantGalleries($metafields: [MetafieldsSetInput!]!) {
     metafieldsSet(metafields: $metafields) {
       metafields {
-        ownerId
+        id
       }
       userErrors {
         field
@@ -143,8 +143,9 @@ async function setNativeImages(
           break;
         }
       }
-    } catch (_e) {
-      fail("no se pudo asignar la imagen principal");
+    } catch (e) {
+      console.error("variant-galleries: imagen principal falló", e);
+      fail(`no se pudo asignar la imagen principal: ${(e instanceof Error ? e.message : String(e)).slice(0, 300)}`);
     }
   }
   return status;
@@ -237,12 +238,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const own = userErrors.filter((e) => e.field?.[1] === String(idx));
         results.push({ variantId: g.variantId, ok: own.length === 0 && userErrors.every((e) => e.field?.[1] != null), userErrors: own });
       }
-    } catch (_e) {
+    } catch (e) {
+      // El mensaje de Shopify (consulta inválida, token, scopes…) no contiene secretos.
+      console.error("variant-galleries: metafieldsSet falló", e);
+      const detail = e instanceof Error ? e.message : String(e);
       for (const g of chunk) {
         results.push({
           variantId: g.variantId,
           ok: false,
-          userErrors: [{ message: "No se pudo guardar la galería" }],
+          userErrors: [{ message: `No se pudo guardar la galería: ${detail.slice(0, 300)}` }],
         });
       }
     }
