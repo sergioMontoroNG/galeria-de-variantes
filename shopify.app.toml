@@ -1,8 +1,8 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "c377bffdd5f972ad0a2f3d97547af3f5"
-name = "galeria de variantes"
-application_url = "https://galeria-de-variantes.vercel.app"
+client_id = "36c2296dec260eb96af4a7a31ce87d66"
+name = "galeria de variantes uk"
+application_url = "https://galeria-de-variantes-uk.vercel.app"
 embedded = true
 
 [access_scopes]
@@ -53,7 +53,7 @@ api_version = "2026-10"
   topics = [ "app/scopes_update" ]
 
 [auth]
-redirect_urls = [ "https://galeria-de-variantes.vercel.app/auth/callback" ]
+redirect_urls = [ "https://galeria-de-variantes-uk.vercel.app/auth/callback" ]
 
 [build]
 automatically_update_urls_on_dev = true
