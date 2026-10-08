@@ -12,10 +12,9 @@
   <script type="application/json" data-variant-gallery-data>
     {
       "images": [
-        {% for media in product.media %}
-          {% if media.media_type == "image" %}
-            { "id": {{ media.id | json }}, "src": {{ media.preview_image | image_url: width: 2048 | json }} }{% unless forloop.last %},{% endunless %}
-          {% endif %}
+        {% assign image_media = product.media | where: "media_type", "image" %}
+        {% for media in image_media %}
+          { "id": {{ media.id | json }}, "src": {{ media.preview_image | image_url: width: 2048 | json }} }{% unless forloop.last %},{% endunless %}
         {% endfor %}
       ],
       "variants": {
