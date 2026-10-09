@@ -28,7 +28,15 @@
                 {% endfor %}
               {% endif %}
             ],
-            "legacyImageId": {{ variant.featured_media.id | json }}
+            "legacyImageId": {{ variant.featured_media.id | json }},
+            "videos": [
+              {% assign gallery_videos = variant.metafields["$app"].gallery_videos.value %}
+              {% if gallery_videos %}
+                {% for video in gallery_videos %}
+                  { "youtubeId": {{ video.youtubeId | json }}, "position": {{ video.position | json }} }{% unless forloop.last %},{% endunless %}
+                {% endfor %}
+              {% endif %}
+            ]
           }{% unless forloop.last %},{% endunless %}
         {% endfor %}
       }

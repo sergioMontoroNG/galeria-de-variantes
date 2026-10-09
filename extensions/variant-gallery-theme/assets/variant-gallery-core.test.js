@@ -148,3 +148,79 @@ describe("computeVisibleImages", () => {
     });
   });
 });
+
+describe("computeGalleryItems", () => {
+  const { computeGalleryItems } = window.VariantGalleryCore;
+  const image = (id) => ({ type: "image", id, src: `https://example.com/${id}.jpg` });
+  const video = (youtubeId) => ({ type: "video", youtubeId });
+  const YT = "dQw4w9WgXcQ";
+  const YT2 = "aqz-KE-bpKQ";
+
+  it("returns just the images when there are no videos", () => {
+    expect(computeGalleryItems(allImages, [2, 4], null, [])).toEqual([image(2), image(4)]);
+    expect(computeGalleryItems(allImages, [2, 4], null, undefined)).toEqual([image(2), image(4)]);
+  });
+
+  it("puts a video at the configured position", () => {
+    expect(computeGalleryItems(allImages, [2, 3, 4], null, [{ youtubeId: YT, position: 1 }])).toEqual([
+      image(2),
+      video(YT),
+      image(3),
+      image(4),
+    ]);
+  });
+
+  it("supports the first position", () => {
+    expect(computeGalleryItems(allImages, [2, 3], null, [{ youtubeId: YT, position: 0 }])).toEqual([
+      video(YT),
+      image(2),
+      image(3),
+    ]);
+  });
+
+  it("clamps a position past the end instead of dropping the video", () => {
+    expect(computeGalleryItems(allImages, [2, 3], null, [{ youtubeId: YT, position: 99 }])).toEqual([
+      image(2),
+      image(3),
+      video(YT),
+    ]);
+  });
+
+  it("counts positions over the gallery, skipping the prepended native image", () => {
+    // legacy 1 leads the gallery [2, 3]; position 1 = after gallery image 2.
+    expect(computeGalleryItems(allImages, [2, 3], 1, [{ youtubeId: YT, position: 1 }])).toEqual([
+      image(1),
+      image(2),
+      video(YT),
+      image(3),
+    ]);
+  });
+
+  it("keeps several videos in position order, and in configured order when they share one", () => {
+    const result = computeGalleryItems(allImages, [2, 3, 4], null, [
+      { youtubeId: YT2, position: 2 },
+      { youtubeId: YT, position: 1 },
+    ]);
+    expect(result).toEqual([image(2), video(YT), image(3), video(YT2), image(4)]);
+
+    const same = computeGalleryItems(allImages, [2, 3], null, [
+      { youtubeId: YT, position: 1 },
+      { youtubeId: YT2, position: 1 },
+    ]);
+    expect(same).toEqual([image(2), video(YT), video(YT2), image(3)]);
+  });
+
+  it("works when the variant has no gallery and shows every product image", () => {
+    const result = computeGalleryItems(allImages, [], null, [{ youtubeId: YT, position: 2 }]);
+    expect(result.map((i) => i.type)).toEqual(["image", "image", "video", "image", "image"]);
+  });
+
+  it("drops entries with an invalid id", () => {
+    expect(
+      computeGalleryItems(allImages, [2, 3], null, [
+        { youtubeId: "short", position: 0 },
+        { youtubeId: null, position: 0 },
+      ]),
+    ).toEqual([image(2), image(3)]);
+  });
+});

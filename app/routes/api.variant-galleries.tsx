@@ -14,6 +14,11 @@ import { unauthenticated } from "../shopify.server";
 //                   "mediaIds": ["gid://shopify/MediaImage/2", ...] }] }
 // El orden de mediaIds es el orden de la minigalería.
 //
+// Opcional por galería: "videos": [{ "youtubeId": "<11 caracteres>", "position": 2 }]
+// (position = fotos que van antes del vídeo). Si la clave "videos" NO se envía,
+// los vídeos que ya tenga la variante no se tocan: n8n solo conoce fotos y un
+// reenvío suyo nunca debe borrar los vídeos puestos a mano en la app.
+//
 // Si se envía además "productId" (gid://shopify/Product/N), la primera foto de
 // cada galería pasa a ser la imagen principal (nativa) de la variante. Se hace
 // aquí, al final, porque Shopify rechaza asignar una imagen a una variante que
@@ -74,9 +79,11 @@ const MAX_PER_CALL = 25; // límite de metafieldsSet
 const VARIANT_GID = /^gid:\/\/shopify\/ProductVariant\/\d+$/;
 const MEDIA_GID = /^gid:\/\/shopify\/MediaImage\/\d+$/;
 const PRODUCT_GID = /^gid:\/\/shopify\/Product\/\d+$/;
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 const SHOP_DOMAIN = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i;
 
-type Gallery = { variantId: string; mediaIds: string[] };
+type Video = { youtubeId: string; position: number };
+type Gallery = { variantId: string; mediaIds: string[]; videos?: Video[] };
 type UserError = { message: string };
 type AdminClient = {
   graphql: (query: string, options?: { variables?: Record<string, unknown> }) => Promise<Response>;
@@ -196,7 +203,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       !g ||
       !VARIANT_GID.test(String(g.variantId)) ||
       !Array.isArray(g.mediaIds) ||
-      !g.mediaIds.every((id) => MEDIA_GID.test(String(id)))
+      !g.mediaIds.every((id) => MEDIA_GID.test(String(id))) ||
+      (g.videos !== undefined &&
+        (!Array.isArray(g.videos) ||
+          !g.videos.every(
+            (v) =>
+              v &&
+              YOUTUBE_ID.test(String(v.youtubeId)) &&
+              Number.isInteger(v.position) &&
+              v.position >= 0,
+          )))
     ) {
       return json({ ok: false, error: `Entrada inválida para ${g?.variantId}` }, 400);
     }
@@ -209,46 +225,56 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ ok: false, error: `La app no está instalada en ${shop}` }, 404);
   }
 
-  const results: { variantId: string; ok: boolean; userErrors: unknown[]; nativeImage?: string }[] = [];
-  for (let i = 0; i < galleries.length; i += MAX_PER_CALL) {
-    const chunk = galleries.slice(i, i + MAX_PER_CALL);
-    const metafields = chunk.map((g) => ({
-      ownerId: g.variantId,
-      namespace: "$app",
-      key: "gallery",
-      type: "list.file_reference",
-      value: JSON.stringify(g.mediaIds),
-    }));
+  const results: { variantId: string; ok: boolean; userErrors: unknown[]; nativeImage?: string }[] =
+    galleries.map((g) => ({ variantId: g.variantId, ok: true, userErrors: [] }));
+
+  // Un metafield por foto-lista y, si se envían, otro por vídeos. El límite de 25
+  // de metafieldsSet cuenta metafields, no galerías.
+  const inputs = galleries.flatMap((g, galleryIndex) => {
+    const base = { ownerId: g.variantId, namespace: "$app" };
+    return [
+      { galleryIndex, input: { ...base, key: "gallery", type: "list.file_reference", value: JSON.stringify(g.mediaIds) } },
+      ...(g.videos === undefined
+        ? []
+        : [{ galleryIndex, input: { ...base, key: "gallery_videos", type: "json", value: JSON.stringify(g.videos) } }]),
+    ];
+  });
+
+  for (let i = 0; i < inputs.length; i += MAX_PER_CALL) {
+    const chunk = inputs.slice(i, i + MAX_PER_CALL);
+    const failChunk = (message: string) => {
+      for (const galleryIndex of new Set(chunk.map((c) => c.galleryIndex))) {
+        results[galleryIndex].ok = false;
+        results[galleryIndex].userErrors.push({ message });
+      }
+    };
     try {
       const response = await admin.graphql(SAVE_GALLERIES_MUTATION, {
-        variables: { metafields },
+        variables: { metafields: chunk.map((c) => c.input) },
       });
       const data: { data?: any; errors?: unknown } = await response.json();
       const userErrors: { field?: string[] | null; message: string }[] =
         data.data?.metafieldsSet?.userErrors ?? [];
       if (!data.data) {
         // Error a nivel de petición (p. ej. token/scopes): se marca todo el lote.
-        for (const g of chunk) {
-          results.push({ variantId: g.variantId, ok: false, userErrors: [{ message: JSON.stringify(data.errors ?? "sin datos") }] });
-        }
+        failChunk(JSON.stringify(data.errors ?? "sin datos"));
         continue;
       }
       // field = ["metafields", "<índice>", ...]
-      for (const [idx, g] of chunk.entries()) {
-        const own = userErrors.filter((e) => e.field?.[1] === String(idx));
-        results.push({ variantId: g.variantId, ok: own.length === 0 && userErrors.every((e) => e.field?.[1] != null), userErrors: own });
+      for (const error of userErrors) {
+        const entry = error.field?.[1] == null ? undefined : chunk[Number(error.field[1])];
+        if (entry) {
+          results[entry.galleryIndex].ok = false;
+          results[entry.galleryIndex].userErrors.push(error);
+        } else {
+          failChunk(error.message); // error sin índice: no se sabe de quién es
+        }
       }
     } catch (e) {
       // El mensaje de Shopify (consulta inválida, token, scopes…) no contiene secretos.
       console.error("variant-galleries: metafieldsSet falló", e);
       const detail = e instanceof Error ? e.message : String(e);
-      for (const g of chunk) {
-        results.push({
-          variantId: g.variantId,
-          ok: false,
-          userErrors: [{ message: `No se pudo guardar la galería: ${detail.slice(0, 300)}` }],
-        });
-      }
+      failChunk(`No se pudo guardar la galería: ${detail.slice(0, 300)}`);
     }
   }
 
