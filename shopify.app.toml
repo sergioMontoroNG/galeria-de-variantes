@@ -25,6 +25,14 @@ description = "Ordered list of images shown when this variant is selected on the
   [variant.metafields.app.gallery.access]
   storefront = "public_read"
 
+[variant.metafields.app.gallery_videos]
+type = "json"
+name = "Videos de la mini galeria"
+description = "YouTube videos shown in this variant's gallery: [{youtubeId, position}], position = gallery images before the video"
+
+  [variant.metafields.app.gallery_videos.access]
+  storefront = "public_read"
+
 [metaobjects.app.example]
 name = "Example"
 description = "An example metaobject definition created by this template"
