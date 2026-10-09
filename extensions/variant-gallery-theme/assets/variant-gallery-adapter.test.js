@@ -295,4 +295,77 @@ describe("variant-gallery-adapter", () => {
 
     expect(Array.from(parent.children)).toEqual([s2, s3, s1, ...rest]);
   });
+
+  describe("YouTube videos", () => {
+    const YT = "dQw4w9WgXcQ";
+    const tiles = () => Array.from(document.querySelectorAll("[data-variant-gallery-video]"));
+
+    it("inserts a tile at the configured position, between the photos", async () => {
+      const payload = basePayload();
+      payload.variants[500] = { gallery: [1, 2, 3], legacyImageId: null, videos: [{ youtubeId: YT, position: 1 }] };
+      setPayload(payload);
+      setVariantInput(500);
+      const s1 = addSlide(1);
+      const s2 = addSlide(2);
+      const s3 = addSlide(3);
+      const parent = s1.parentElement;
+
+      await loadAdapter();
+
+      const [tile] = tiles();
+      expect(Array.from(parent.children)).toEqual([s1, tile, s2, s3]);
+      expect(tile.getAttribute("data-variant-gallery-video")).toBe(YT);
+      expect(tile.classList.contains("product-images__slide--image")).toBe(false);
+    });
+
+    it("keeps the video before the hidden slides when it goes last", async () => {
+      const payload = basePayload();
+      payload.variants[500] = { gallery: [2, 3], legacyImageId: null, videos: [{ youtubeId: YT, position: 5 }] };
+      setPayload(payload);
+      setVariantInput(500); // image 1 hidden
+      const s1 = addSlide(1);
+      const s2 = addSlide(2);
+      const s3 = addSlide(3);
+      const parent = s1.parentElement;
+
+      await loadAdapter();
+
+      expect(Array.from(parent.children)).toEqual([s2, s3, tiles()[0], s1]);
+    });
+
+    it("removes the previous tile when switching to a variant without videos", async () => {
+      const payload = basePayload();
+      payload.variants[500] = { gallery: [1, 2, 3], legacyImageId: null, videos: [{ youtubeId: YT, position: 0 }] };
+      setPayload(payload);
+      setVariantInput(500);
+      addSlide(1);
+      addSlide(2);
+      addSlide(3);
+
+      await loadAdapter();
+      expect(tiles()).toHaveLength(1);
+
+      document.dispatchEvent(new CustomEvent("product:variant-change", { detail: { variant: { id: 200 } } }));
+      expect(tiles()).toHaveLength(0);
+    });
+
+    it("loads the player only on click and removes it when closed", async () => {
+      const payload = basePayload();
+      payload.variants[500] = { gallery: [1, 2], legacyImageId: null, videos: [{ youtubeId: YT, position: 0 }] };
+      setPayload(payload);
+      setVariantInput(500);
+      addSlide(1);
+      addSlide(2);
+
+      await loadAdapter();
+      expect(document.querySelector("iframe")).toBeNull();
+
+      tiles()[0].querySelector("button").click();
+      const iframe = document.querySelector("iframe");
+      expect(iframe.src).toContain(`youtube-nocookie.com/embed/${YT}`);
+
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      expect(document.querySelector("iframe")).toBeNull();
+    });
+  });
 });

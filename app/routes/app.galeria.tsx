@@ -8,6 +8,15 @@ import { useFetcher } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
+import {
+  buildItems,
+  itemKey,
+  parseYoutubeId,
+  readStoredVideos,
+  splitItems,
+  type GalleryItem,
+  type StoredVideo,
+} from "../gallery-items";
 
 // This page replaces the old admin block-extension editor. Admin blocks are
 // capped to a fixed height with no internal scrolling, so a variant with
@@ -65,18 +74,27 @@ const VARIANT_GALLERY_QUERY = `#graphql
       galleryMetafield: metafield(namespace: "$app", key: "gallery") {
         jsonValue
       }
+      videosMetafield: metafield(namespace: "$app", key: "gallery_videos") {
+        jsonValue
+      }
     }
   }
 `;
 
 const SAVE_VARIANT_GALLERY_MUTATION = `#graphql
-  mutation SaveVariantGalleryPage($variantId: ID!, $value: String!) {
+  mutation SaveVariantGalleryPage($variantId: ID!, $value: String!, $videos: String!) {
     metafieldsSet(metafields: [{
       ownerId: $variantId,
       namespace: "$app",
       key: "gallery",
       type: "list.file_reference",
       value: $value
+    }, {
+      ownerId: $variantId,
+      namespace: "$app",
+      key: "gallery_videos",
+      type: "json",
+      value: $videos
     }]) {
       userErrors {
         field
@@ -96,6 +114,7 @@ type VariantGallery = {
   image: GalleryImage | null;
   images: GalleryImage[];
   selectedIds: string[];
+  videos: StoredVideo[];
   storeUrl: string | null;
   siblingVariants: SiblingVariant[];
 };
@@ -128,6 +147,8 @@ async function loadVariantGallery(
   const selectedIds = Array.isArray(variant.galleryMetafield?.jsonValue)
     ? variant.galleryMetafield.jsonValue
     : [];
+
+  const videos = readStoredVideos(variant.videosMetafield?.jsonValue);
 
   type VariantMediaNode = {
     mediaContentType: string;
@@ -162,6 +183,7 @@ async function loadVariantGallery(
     image,
     images,
     selectedIds,
+    videos,
     storeUrl,
     siblingVariants,
   };
@@ -189,10 +211,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
   const variantId = String(formData.get("variantId") ?? "");
   const value = String(formData.get("value") ?? "[]");
+  const videos = String(formData.get("videos") ?? "[]");
 
   try {
     const response = await admin.graphql(SAVE_VARIANT_GALLERY_MUTATION, {
-      variables: { variantId, value },
+      variables: { variantId, value, videos },
     });
     const json = await response.json();
     const userErrors = json.data?.metafieldsSet?.userErrors ?? [];
@@ -213,7 +236,9 @@ export default function GaleriaDeVariantes() {
   const loadFetcher = useFetcher<typeof loader>();
   const saveFetcher = useFetcher<typeof action>();
 
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [items, setItems] = useState<GalleryItem[]>([]);
+  const [videoInput, setVideoInput] = useState("");
+  const [videoError, setVideoError] = useState<string | null>(null);
   const [recent, setRecent] = useState<RecentVariant[]>([]);
 
   const variant = loadFetcher.data?.variant ?? null;
@@ -222,7 +247,17 @@ export default function GaleriaDeVariantes() {
 
   useEffect(() => {
     if (!variant) return;
-    setSelectedIds(variant.selectedIds);
+    // Los ids de fotos que ya no existen en el producto se descartan aquí;
+    // al guardar desaparecen del metafield.
+    const existing = new Set(variant.images.map((img) => img.id));
+    setItems(
+      buildItems(
+        variant.selectedIds.filter((id) => existing.has(id)),
+        variant.videos,
+      ),
+    );
+    setVideoInput("");
+    setVideoError(null);
     setRecent((prev) => {
       const withoutCurrent = prev.filter((entry) => entry.id !== variant.id);
       return [
@@ -275,34 +310,59 @@ export default function GaleriaDeVariantes() {
   }
 
   function toggleImage(id: string) {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((existing) => existing !== id) : [...prev, id],
+    setItems((prev) =>
+      prev.some((item) => item.kind === "image" && item.id === id)
+        ? prev.filter((item) => !(item.kind === "image" && item.id === id))
+        : [...prev, { kind: "image", id }],
     );
   }
 
-  function moveImage(id: string, direction: number) {
-    setSelectedIds((prev) => {
-      const index = prev.indexOf(id);
+  function removeItem(index: number) {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function moveItem(index: number, direction: number) {
+    setItems((prev) => {
       const target = index + direction;
-      if (index === -1 || target < 0 || target >= prev.length) return prev;
+      if (index < 0 || target < 0 || target >= prev.length) return prev;
       const next = [...prev];
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
   }
 
+  function addVideo() {
+    const youtubeId = parseYoutubeId(videoInput);
+    if (!youtubeId) {
+      setVideoError("No es un enlace o id de YouTube válido.");
+      return;
+    }
+    if (items.some((item) => item.kind === "video" && item.youtubeId === youtubeId)) {
+      setVideoError("Ese vídeo ya está en la galería.");
+      return;
+    }
+    setItems((prev) => [...prev, { kind: "video", youtubeId }]);
+    setVideoInput("");
+    setVideoError(null);
+  }
+
   function handleSave() {
     if (!variant) return;
+    const { imageIds, videos } = splitItems(items);
     saveFetcher.submit(
-      { variantId: variant.id, value: JSON.stringify(selectedIds) },
+      {
+        variantId: variant.id,
+        value: JSON.stringify(imageIds),
+        videos: JSON.stringify(videos),
+      },
       { method: "POST" },
     );
   }
 
   const productImages = variant?.images ?? [];
-  const orderedSelected = selectedIds
-    .map((id) => productImages.find((img) => img.id === id))
-    .filter((img): img is GalleryImage => Boolean(img));
+  const selectedImageIds = new Set(
+    items.flatMap((item) => (item.kind === "image" ? [item.id] : [])),
+  );
   const saving = saveFetcher.state !== "idle";
 
   return (
@@ -359,51 +419,89 @@ export default function GaleriaDeVariantes() {
               primer lugar.
             </s-text>
 
-            {orderedSelected.length > 0 && (
+            {items.length > 0 && (
               <s-stack direction="block" gap="small-200">
                 <s-text type="strong">Orden de la mini galería</s-text>
                 <s-grid gridTemplateColumns="repeat(auto-fill, minmax(96px, 1fr))" gap="small-200">
-                  {orderedSelected.map((img, index) => (
-                    <s-box
-                      key={img.id}
-                      padding="small-200"
-                      borderRadius="small"
-                      borderWidth="small-100"
-                      borderColor="subdued"
-                      background="subdued"
-                    >
-                      <s-stack direction="block" gap="small-200" alignItems="center">
-                        <s-thumbnail src={img.url} alt={img.alt} size="small" />
-                        <s-text>{index + 1}</s-text>
-                        <s-stack direction="inline" gap="small-200">
-                          <s-button
-                            disabled={index === 0}
-                            onClick={() => moveImage(img.id, -1)}
-                            accessibilityLabel="Subir"
-                          >
-                            ↑
-                          </s-button>
-                          <s-button
-                            disabled={index === orderedSelected.length - 1}
-                            onClick={() => moveImage(img.id, 1)}
-                            accessibilityLabel="Bajar"
-                          >
-                            ↓
-                          </s-button>
-                          <s-button
-                            onClick={() => toggleImage(img.id)}
-                            accessibilityLabel="Quitar de la galería"
-                            tone="critical"
-                          >
-                            ×
-                          </s-button>
+                  {items.map((item, index) => {
+                    const img =
+                      item.kind === "image"
+                        ? productImages.find((candidate) => candidate.id === item.id)
+                        : null;
+                    const src =
+                      item.kind === "video"
+                        ? `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`
+                        : img?.url;
+                    return (
+                      <s-box
+                        key={itemKey(item)}
+                        padding="small-200"
+                        borderRadius="small"
+                        borderWidth="small-100"
+                        borderColor="subdued"
+                        background="subdued"
+                      >
+                        <s-stack direction="block" gap="small-200" alignItems="center">
+                          <s-thumbnail
+                            src={src}
+                            alt={item.kind === "video" ? "Vídeo de YouTube" : img?.alt}
+                            size="small"
+                          />
+                          <s-text>
+                            {item.kind === "video" ? `${index + 1} · Vídeo` : index + 1}
+                          </s-text>
+                          <s-stack direction="inline" gap="small-200">
+                            <s-button
+                              disabled={index === 0}
+                              onClick={() => moveItem(index, -1)}
+                              accessibilityLabel="Subir"
+                            >
+                              ↑
+                            </s-button>
+                            <s-button
+                              disabled={index === items.length - 1}
+                              onClick={() => moveItem(index, 1)}
+                              accessibilityLabel="Bajar"
+                            >
+                              ↓
+                            </s-button>
+                            <s-button
+                              onClick={() => removeItem(index)}
+                              accessibilityLabel={
+                                item.kind === "video" ? "Quitar vídeo" : "Quitar de la galería"
+                              }
+                              tone="critical"
+                            >
+                              ×
+                            </s-button>
+                          </s-stack>
                         </s-stack>
-                      </s-stack>
-                    </s-box>
-                  ))}
+                      </s-box>
+                    );
+                  })}
                 </s-grid>
               </s-stack>
             )}
+
+            <s-stack direction="block" gap="small-200">
+              <s-text type="strong">Añadir vídeo de YouTube</s-text>
+              <s-stack direction="inline" gap="small-200" alignItems="end">
+                <s-text-field
+                  label="Enlace o id del vídeo"
+                  value={videoInput}
+                  error={videoError ?? undefined}
+                  onInput={(event: Event) => {
+                    setVideoInput((event.currentTarget as HTMLInputElement).value);
+                    setVideoError(null);
+                  }}
+                />
+                <s-button onClick={addVideo}>Añadir</s-button>
+              </s-stack>
+              <s-text color="subdued">
+                Se añade al final; muévelo con las flechas a la posición que
+                quieras y pulsa Guardar.
+              </s-text>
+            </s-stack>
 
             <s-stack direction="block" gap="small">
               <s-text type="strong">Imágenes del producto</s-text>
@@ -412,7 +510,7 @@ export default function GaleriaDeVariantes() {
               )}
               <s-grid gridTemplateColumns="repeat(auto-fill, minmax(64px, 1fr))" gap="small-200">
                 {productImages.map((img) => {
-                  const selected = selectedIds.includes(img.id);
+                  const selected = selectedImageIds.has(img.id);
                   return (
                     <s-clickable
                       key={img.id}
